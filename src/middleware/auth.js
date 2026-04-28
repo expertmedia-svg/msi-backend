@@ -78,7 +78,7 @@ const autoriser = (module, action = 'lire') => {
     const { permissions, role_code } = req.utilisateur;
 
     // Admin a tous les droits
-    if (role_code === 'admin' || permissions['*']?.['*']) {
+    if (role_code === 'admin' || role_code === 'admin_systeme' || permissions['*']?.['*']) {
       return next();
     }
 

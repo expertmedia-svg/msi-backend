@@ -277,4 +277,34 @@ const ajouterEvaluation = async (req, res) => {
   }
 };
 
-module.exports = { lister, obtenir, creer, modifier, gererListeNoire, ajouterEvaluation };
+/**
+ * POST /api/fournisseurs/:id/documents
+ * Ajouter un document (vetting) au fournisseur
+ */
+const ajouterDocument = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type_document, date_expiration } = req.body;
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Aucun fichier fourni' });
+    }
+
+    const chemin_fichier = `/uploads/${req.file.filename}`;
+    const nom_fichier = req.file.originalname;
+
+    const result = await query(
+      `INSERT INTO fournisseurs_documents
+         (fournisseur_id, type_document, nom_fichier, chemin_fichier, date_expiration, uploaded_by)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [id, type_document, nom_fichier, chemin_fichier, date_expiration, req.utilisateur.id]
+    );
+
+    return res.status(201).json({ success: true, data: result.rows[0], message: 'Document ajouté avec succès' });
+  } catch (err) {
+    logger.error('Erreur ajout document fournisseur:', err);
+    return res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
+};
+
+module.exports = { lister, obtenir, creer, modifier, gererListeNoire, ajouterEvaluation, ajouterDocument };

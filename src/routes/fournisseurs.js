@@ -12,5 +12,6 @@ router.post('/', autoriser('achats', 'creer'), ctrl.creer);
 router.put('/:id', autoriser('achats', 'modifier'), ctrl.modifier);
 router.put('/:id/liste-noire', autoriser('achats', 'modifier'), ctrl.gererListeNoire);
 router.post('/:id/evaluations', autoriser('achats', 'creer'), ctrl.ajouterEvaluation);
+router.post('/:id/documents', autoriser('achats', 'modifier'), upload.single('fichier'), ctrl.ajouterDocument);
 
 module.exports = router;

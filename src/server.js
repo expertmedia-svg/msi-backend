@@ -182,7 +182,7 @@ cron.schedule('0 3 * * *', async () => {
     await query(
       `UPDATE utilisateurs SET actif = 0
        WHERE derniere_connexion < ? AND actif = 1
-         AND role_id NOT IN (SELECT id FROM roles WHERE code = 'admin')`,
+         AND role_id NOT IN (SELECT id FROM roles WHERE code IN ('admin', 'admin_systeme'))`,
       [cutoff]
     );
     saveDatabase();

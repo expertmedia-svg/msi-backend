@@ -78,6 +78,7 @@ const connexion = async (req, res) => {
         [nouveauxEchecs, verrouillage, utilisateur.id]
       );
       await logAction('echec');
+      saveDatabase();
 
       if (verrouillage) {
         return res.status(423).json({ success: false, message: `Trop de tentatives. Compte verrouillé ${VERROUILLAGE_MINUTES} minutes.` });

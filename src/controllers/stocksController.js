@@ -150,8 +150,9 @@ const enregistrerMouvement = async (req, res) => {
         lotId = lotResult.rows[0].id;
       }
 
-      // Vérifier stock disponible pour sortie/transfert
-      if (['sortie', 'transfert'].includes(type_mouvement)) {
+      // Vérifier stock et FEFO pour sortie/transfert
+      let lotsToDeduct = [];
+      if (['sortie', 'transfert', 'elimination'].includes(type_mouvement)) {
         const stockResult = await client.query(
           'SELECT quantite FROM stocks WHERE article_id = $1 AND magasin_id = $2',
           [article_id, magasin_source_id]
@@ -160,21 +161,36 @@ const enregistrerMouvement = async (req, res) => {
         if (stockDispo < parseFloat(quantite)) {
           throw new Error(`Stock insuffisant. Disponible: ${stockDispo}, Demandé: ${quantite}`);
         }
+
+        if (!lot_id) {
+          // Logique FEFO (First Expired First Out)
+          const lotsResult = await client.query(
+            `SELECT id, quantite, prix_unitaire FROM lots
+             WHERE article_id = $1 AND magasin_id = $2 AND quantite > 0 AND statut = 'disponible'
+             ORDER BY date_peremption ASC NULLS LAST`,
+            [article_id, magasin_source_id]
+          );
+
+          let remainingQty = parseFloat(quantite);
+          for (const l of lotsResult.rows) {
+            if (remainingQty <= 0) break;
+            const qtyToDeduct = Math.min(remainingQty, parseFloat(l.quantite));
+            lotsToDeduct.push({ id: l.id, qty: qtyToDeduct, prix: l.prix_unitaire || prix_unitaire });
+            remainingQty -= qtyToDeduct;
+          }
+
+          if (remainingQty > 0) {
+            throw new Error(`Stock insuffisant dans les lots disponibles. Manque: ${remainingQty}`);
+          }
+        } else {
+          lotsToDeduct.push({ id: lot_id, qty: parseFloat(quantite), prix: prix_unitaire });
+        }
+      } else {
+        // Pour les entrées ou autres
+        lotsToDeduct.push({ id: lotId, qty: parseFloat(quantite), prix: prix_unitaire });
       }
 
-      // Enregistrer le mouvement
-      const mvResult = await client.query(
-        `INSERT INTO mouvements_stock
-           (type_mouvement, article_id, lot_id, magasin_source_id, magasin_dest_id,
-            quantite, prix_unitaire, valeur, reference_document, projet_id,
-            destinataire, motif, saisi_par)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
-        [type_mouvement, article_id, lotId, magasin_source_id, magasin_dest_id,
-         quantite, prix_unitaire, parseFloat(quantite) * parseFloat(prix_unitaire || 0),
-         reference_document, projet_id, destinataire, motif, req.utilisateur.id]
-      );
-
-      // Mettre à jour les stocks : INSERT avec 0 puis toujours UPDATE pour éviter le double-comptage
+      // Mettre à jour les stocks globaux (un seul update par article/magasin)
       if (type_mouvement === 'entree') {
         const valeur = parseFloat(quantite) * parseFloat(prix_unitaire || 0);
         await client.query(
@@ -206,7 +222,6 @@ const enregistrerMouvement = async (req, res) => {
           [quantite, article_id, magasin_source_id]
         );
 
-        // Pour transfert, ajouter au magasin destination
         if (type_mouvement === 'transfert') {
           const prixResult = await client.query(
             'SELECT cump FROM stocks WHERE article_id = $1 AND magasin_id = $2',
@@ -228,17 +243,33 @@ const enregistrerMouvement = async (req, res) => {
             [article_id, magasin_dest_id, quantite, valeurTransfert]
           );
         }
+      }
 
-        // Mettre à jour le lot
-        if (lotId) {
+      // Enregistrer les mouvements (1 par lot affecté)
+      let dernierMvResult = null;
+      for (const item of lotsToDeduct) {
+        const mvResult = await client.query(
+          `INSERT INTO mouvements_stock
+             (type_mouvement, article_id, lot_id, magasin_source_id, magasin_dest_id,
+              quantite, prix_unitaire, valeur, reference_document, projet_id,
+              destinataire, motif, saisi_par)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+          [type_mouvement, article_id, item.id, magasin_source_id, magasin_dest_id,
+           item.qty, item.prix, item.qty * parseFloat(item.prix || 0),
+           reference_document, projet_id, destinataire, motif, req.utilisateur.id]
+        );
+        dernierMvResult = mvResult.rows[0];
+
+        // Mettre à jour la quantité du lot déduit
+        if (['sortie', 'transfert', 'elimination'].includes(type_mouvement) && item.id) {
           await client.query(
             'UPDATE lots SET quantite = MAX(0.0, quantite - $1), updated_at = datetime(\'now\') WHERE id = $2',
-            [quantite, lotId]
+            [item.qty, item.id]
           );
         }
       }
 
-      return mvResult.rows[0];
+      return dernierMvResult;
     });
 
     return res.status(201).json({

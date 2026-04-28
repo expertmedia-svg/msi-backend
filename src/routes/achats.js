@@ -12,5 +12,6 @@ router.put('/demandes/:id/valider', autoriser('achats', 'valider'), ctrl.valider
 router.get('/commandes', autoriser('achats'), ctrl.listerCommandes);
 router.post('/commandes', autoriser('achats', 'creer'), ctrl.creerCommande);
 router.post('/receptions', autoriser('achats', 'creer'), ctrl.enregistrerReception);
+router.get('/devis/:id/comparatif', autoriser('achats'), ctrl.genererTableauComparatif);
 
 module.exports = router;

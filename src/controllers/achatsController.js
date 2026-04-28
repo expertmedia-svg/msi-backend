@@ -17,7 +17,7 @@ const listerDemandes = async (req, res) => {
     if (projet_id) { params.push(projet_id); conditions.push(`da.projet_id = $${params.length}`); }
 
     // Non-admins voient seulement leurs demandes ou celles à valider
-    if (!['admin', 'responsable_logistique', 'validateur'].includes(req.utilisateur.role_code)) {
+    if (!['admin', 'admin_systeme', 'responsable_logistique', 'validateur'].includes(req.utilisateur.role_code)) {
       params.push(req.utilisateur.id);
       conditions.push(`da.demandeur_id = $${params.length}`);
     }
@@ -359,4 +359,58 @@ const kpiAchats = async (req, res) => {
   }
 };
 
-module.exports = { listerDemandes, creerDemande, validerDemande, listerCommandes, creerCommande, enregistrerReception, kpiAchats };
+// ── Comparateur de Devis ────────────────────────────────────────
+
+const genererTableauComparatif = async (req, res) => {
+  try {
+    const { id } = req.params; // demande_devis_id
+
+    const result = await query(
+      `SELECT 
+         dal.id AS ligne_id,
+         a.designation AS article_nom,
+         dal.quantite AS quantite_demandee,
+         f.id AS fournisseur_id,
+         f.nom AS fournisseur_nom,
+         ol.prix_unitaire AS prix_unitaire_propose,
+         (ol.prix_unitaire * dal.quantite) AS montant_propose
+       FROM demandes_devis dd
+       JOIN demandes_devis_fournisseurs ddf ON ddf.demande_devis_id = dd.id
+       JOIN offres_fournisseurs ofour ON ofour.ddq_fournisseur_id = ddf.id
+       JOIN offres_lignes ol ON ol.offre_id = ofour.id
+       JOIN demandes_achat_lignes dal ON ol.demande_ligne_id = dal.id
+       JOIN articles a ON dal.article_id = a.id
+       JOIN fournisseurs f ON ddf.fournisseur_id = f.id
+       WHERE dd.id = $1
+       ORDER BY dal.id, ol.prix_unitaire ASC`,
+      [id]
+    );
+
+    // Formatter le résultat pour le front:
+    // { lignes: [ { ligne_id, article, offres: [ { fournisseur_id, nom, prix... } ] } ] }
+    const tableau = {};
+    result.rows.forEach(r => {
+      if (!tableau[r.ligne_id]) {
+        tableau[r.ligne_id] = {
+          ligne_id: r.ligne_id,
+          article_nom: r.article_nom,
+          quantite_demandee: r.quantite_demandee,
+          offres: []
+        };
+      }
+      tableau[r.ligne_id].offres.push({
+        fournisseur_id: r.fournisseur_id,
+        fournisseur_nom: r.fournisseur_nom,
+        prix_unitaire_propose: r.prix_unitaire_propose,
+        montant_propose: r.montant_propose
+      });
+    });
+
+    return res.json({ success: true, data: Object.values(tableau) });
+  } catch (err) {
+    logger.error('Erreur comparateur devis:', err);
+    return res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
+};
+
+module.exports = { listerDemandes, creerDemande, validerDemande, listerCommandes, creerCommande, enregistrerReception, kpiAchats, genererTableauComparatif };
