@@ -86,13 +86,17 @@ app.use(rateLimit({
   message: { success: false, message: 'Trop de requêtes, veuillez réessayer plus tard.' },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => req.ip,
+  skip: (req) => process.env.NODE_ENV === 'test',
 }));
 
 // Rate limiting strict pour auth
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: parseInt(process.env.AUTH_RATE_LIMIT_MAX) || 5,
-  message: { success: false, message: 'Trop de tentatives de connexion.' }
+  message: { success: false, message: 'Trop de tentatives de connexion.' },
+  keyGenerator: (req) => req.ip,
+  skip: (req) => process.env.NODE_ENV === 'test',
 });
 
 app.use(compression());
