@@ -38,6 +38,9 @@ const PORT = process.env.PORT || 3000;
 
 // ── Middleware de sécurité ──────────────────────────────────
 
+// Trust proxy (Nginx forward headers)
+app.set('trust proxy', 1);
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -58,7 +61,8 @@ app.use(cors({
       'capacitor://localhost',    // iOS Capacitor
       'http://localhost',         // localhost
       'http://localhost:3000',
-      'http://localhost:5173'
+      'http://localhost:5173',
+      'http://localhost:5175'
     ];
     // Permettre requêtes sans origin (apps natives, Postman)
     if (!origin || allowed.includes(origin)) {
