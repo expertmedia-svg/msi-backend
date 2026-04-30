@@ -363,50 +363,60 @@ const kpiAchats = async (req, res) => {
 
 const genererTableauComparatif = async (req, res) => {
   try {
-    const { id } = req.params; // demande_devis_id
+    const { id } = req.params; // demande_devis_id (ou on peut adapter pour DA id)
 
-    const result = await query(
-      `SELECT 
-         dal.id AS ligne_id,
-         a.designation AS article_nom,
-         dal.quantite AS quantite_demandee,
-         f.id AS fournisseur_id,
-         f.nom AS fournisseur_nom,
-         ol.prix_unitaire AS prix_unitaire_propose,
-         (ol.prix_unitaire * dal.quantite) AS montant_propose
-       FROM demandes_devis dd
-       JOIN demandes_devis_fournisseurs ddf ON ddf.demande_devis_id = dd.id
-       JOIN offres_fournisseurs ofour ON ofour.ddq_fournisseur_id = ddf.id
-       JOIN offres_lignes ol ON ol.offre_id = ofour.id
-       JOIN demandes_achat_lignes dal ON ol.demande_ligne_id = dal.id
-       JOIN articles a ON dal.article_id = a.id
-       JOIN fournisseurs f ON ddf.fournisseur_id = f.id
-       WHERE dd.id = $1
-       ORDER BY dal.id, ol.prix_unitaire ASC`,
-      [id]
-    );
+    // On récupère toutes les offres liées à cette demande de devis
+    const queryStr = `
+      SELECT 
+        f.id AS fournisseur_id, f.nom AS fournisseur_nom, f.note_globale,
+        dal.description AS article_description, dal.quantite, dal.unite_mesure,
+        ol.prix_unitaire, ol.prix_unitaire_fcfa
+      FROM demandes_devis dd
+      JOIN demandes_devis_fournisseurs ddf ON ddf.demande_devis_id = dd.id
+      JOIN offres_fournisseurs ofour ON ofour.ddq_fournisseur_id = ddf.id
+      JOIN offres_lignes ol ON ol.offre_id = ofour.id
+      JOIN demandes_achat_lignes dal ON ol.demande_ligne_id = dal.id
+      JOIN fournisseurs f ON ddf.fournisseur_id = f.id
+      WHERE dd.id = $1 OR dd.demande_achat_id = $1
+    `;
+    const result = await query(queryStr, [id]);
 
-    // Formatter le résultat pour le front:
-    // { lignes: [ { ligne_id, article, offres: [ { fournisseur_id, nom, prix... } ] } ] }
-    const tableau = {};
+    if (result.rows.length === 0) {
+      return res.json({ success: true, data: null });
+    }
+
+    // Transformer pour le front (Matrice)
+    const fournisseursMap = {};
+    const articlesMap = {};
+    const offres = [];
+
     result.rows.forEach(r => {
-      if (!tableau[r.ligne_id]) {
-        tableau[r.ligne_id] = {
-          ligne_id: r.ligne_id,
-          article_nom: r.article_nom,
-          quantite_demandee: r.quantite_demandee,
-          offres: []
-        };
-      }
-      tableau[r.ligne_id].offres.push({
+      fournisseursMap[r.fournisseur_id] = { 
+        id: r.fournisseur_id, 
+        nom: r.fournisseur_nom, 
+        note_globale: r.note_globale 
+      };
+      articlesMap[r.article_description] = { 
+        description: r.article_description, 
+        quantite: r.quantite, 
+        unite_mesure: r.unite_mesure 
+      };
+      offres.push({
         fournisseur_id: r.fournisseur_id,
-        fournisseur_nom: r.fournisseur_nom,
-        prix_unitaire_propose: r.prix_unitaire_propose,
-        montant_propose: r.montant_propose
+        description: r.article_description,
+        prix_unitaire: r.prix_unitaire_fcfa || r.prix_unitaire,
+        quantite: r.quantite
       });
     });
 
-    return res.json({ success: true, data: Object.values(tableau) });
+    return res.json({
+      success: true,
+      data: {
+        fournisseurs: Object.values(fournisseursMap),
+        articles: Object.values(articlesMap),
+        offres: offres
+      }
+    });
   } catch (err) {
     logger.error('Erreur comparateur devis:', err);
     return res.status(500).json({ success: false, message: 'Erreur serveur' });
