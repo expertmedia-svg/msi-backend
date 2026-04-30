@@ -7,7 +7,7 @@ const bcrypt = require('bcrypt');
 const logger = require('../config/logger');
 
 router.use(authentifier);
-router.use(requireRole('admin'));
+router.use(requireRole('admin', 'admin_systeme'));
 
 // Liste utilisateurs
 router.get('/utilisateurs', async (req, res) => {
