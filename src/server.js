@@ -93,10 +93,10 @@ app.use(rateLimit({
 // Rate limiting strict pour auth
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX) || 5,
-  message: { success: false, message: 'Trop de tentatives de connexion.' },
+  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX) || 100,
+  message: { success: false, message: 'Trop de tentatives de connexion. Réessayez plus tard.' },
   keyGenerator: (req) => req.ip,
-  skip: (req) => process.env.NODE_ENV === 'test',
+  skip: (req) => process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development',
 });
 
 app.use(compression());
