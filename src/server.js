@@ -56,6 +56,7 @@ app.use(cors({
   origin: (origin, callback) => {
     const allowed = [
       process.env.FRONTEND_URL || 'http://localhost:5173',
+      'https://comstratmedia.com',
       'http://10.0.2.2:3000',    // émulateur Android → localhost
       'http://10.0.2.2:5173',    // web dev Android
       'capacitor://localhost',    // iOS Capacitor
