@@ -198,6 +198,19 @@ async function start() {
   await initializeDatabase();
   logger.info('✅ Base SQLite initialisée');
 
+  // Seed automatique des utilisateurs de production si nécessaire
+  try {
+    const { query: dbQuery } = require('./config/database');
+    const usersCount = await dbQuery('SELECT COUNT(*) as count FROM utilisateurs');
+    if (usersCount.rows[0].count <= 2) { // Si seulement adminmsi et un autre
+      logger.info('🌱 Peu d\'utilisateurs détectés. Lancement du seed production...');
+      const seedProd = require('./database/seed-prod-users-logic');
+      await seedProd();
+    }
+  } catch (err) {
+    logger.warn('Avertissement seed auto:', err.message);
+  }
+
   if (process.env.NODE_ENV !== 'test') {
     app.listen(PORT, '0.0.0.0', () => {
       logger.info(`🚀 Serveur MSI BF démarré sur le port ${PORT}`);
