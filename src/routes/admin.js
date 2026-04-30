@@ -109,4 +109,16 @@ router.put('/devises/:code/taux', async (req, res) => {
   }
 });
 
+// Seed de données démo (pour présentation)
+router.post('/demo-seed', async (req, res) => {
+  try {
+    const seedDemo = require('../database/seed-demo-data-logic');
+    await seedDemo();
+    return res.json({ success: true, message: 'Données de démonstration générées avec succès !' });
+  } catch (err) {
+    logger.error('Erreur demo-seed:', err);
+    return res.status(500).json({ success: false, message: 'Erreur lors de la génération des données' });
+  }
+});
+
 module.exports = router;
