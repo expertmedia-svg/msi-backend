@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 
 async function seedDemoDataLogic() {
   try {
-    console.log('🌱 Lancement du seed de données démo MASSIVE...');
+    console.log('🌱 Lancement du seed de données démo MASSIVE & COMPLÈTE...');
 
     // 1. Sites
     const sites = [
@@ -96,21 +96,21 @@ async function seedDemoDataLogic() {
       }
     }
 
-    const fournisseurs = [
-      { code: 'F-CAMEG', nom: 'CAMEG BF', email: 'info@cameg.bf' },
-      { code: 'F-SOPROFA', nom: 'SOPROFA SARL', email: 'contact@soprofa.bf' },
-      { code: 'F-SODIMED', nom: 'SODIMED SARL', email: 'sales@sodimed.bf' },
+    const fournisseursData = [
+      { code: 'F-CAMEG', nom: 'CAMEG BF', email: 'info@cameg.bf', contact: 'M. Diallo' },
+      { code: 'F-SOPROFA', nom: 'SOPROFA SARL', email: 'contact@soprofa.bf', contact: 'Mme Ouedraogo' },
+      { code: 'F-SODIMED', nom: 'SODIMED SARL', email: 'sales@sodimed.bf', contact: 'M. Sawadogo' },
     ];
 
-    const fournisseurIds = {};
-    for (const f of fournisseurs) {
+    const fIds = {};
+    for (const f of fournisseursData) {
       const existing = await query('SELECT id FROM fournisseurs WHERE code = ?', [f.code]);
       if (existing.rows.length > 0) {
-        fournisseurIds[f.nom] = existing.rows[0].id;
+        fIds[f.nom] = existing.rows[0].id;
       } else {
         const id = uuidv4();
-        await query(`INSERT INTO fournisseurs (id, code, nom, email, actif) VALUES (?, ?, ?, ?, 1)`, [id, f.code, f.nom, f.email]);
-        fournisseurIds[f.nom] = id;
+        await query(`INSERT INTO fournisseurs (id, code, nom, email, contact_nom, actif) VALUES (?, ?, ?, ?, ?, 1)`, [id, f.code, f.nom, f.email, f.contact]);
+        fIds[f.nom] = id;
       }
     }
 
@@ -120,123 +120,86 @@ async function seedDemoDataLogic() {
 
     // 5. TRANSACTIONS MASSIVES
     if (adminId) {
-      const statuses = ['soumis', 'en_validation', 'approuve', 'rejete'];
+      const ts = Date.now().toString().slice(-4);
       
       // A. Demandes d'achat (15 DAs)
+      const lastDaIds = [];
       for (let i = 1; i <= 15; i++) {
         const daId = uuidv4();
+        lastDaIds.push(daId);
         const siteCode = Object.keys(siteIds)[i % 5];
         const projCode = Object.keys(projetIds)[i % 3];
-        const status = statuses[i % 4];
         const amount = 50000 + Math.floor(Math.random() * 500000);
         
         await query(
           `INSERT OR IGNORE INTO demandes_achat (id, numero, titre, demandeur_id, site_id, projet_id, statut, montant_estime, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '-${i} days'))`,
-          [daId, `DA-2026-${String(i).padStart(4, '0')}`, `Besoin démo ${i}`, adminId, siteIds[siteCode], projetIds[projCode], status, amount]
+           VALUES (?, ?, ?, ?, ?, ?, 'soumis', ?, datetime('now', '-${i} days'))`,
+          [daId, `DA-2026-${String(i).padStart(4, '0')}`, `Besoin démo ${i}`, adminId, siteIds[siteCode], projetIds[projCode], amount]
         );
+
+        // Lignes DA (essentiel pour le comparateur)
+        const dalId = uuidv4();
+        await query(
+          `INSERT INTO demandes_achat_lignes (id, demande_id, article_id, quantite, unite_mesure, prix_unitaire_estime)
+           VALUES (?, ?, ?, 100, 'unité', 2500)`,
+          [dalId, daId, articleIds['PH-001']]
+        );
+
+        // COMPARATEUR DE PRIX (Scenario)
+        if (i === 1) {
+          const ddId = uuidv4();
+          await query(`INSERT INTO demandes_devis (id, numero, demande_achat_id, statut) VALUES (?, ?, ?, 'ouvert')`, [ddId, `DD-2026-0001`, daId]);
+          
+          for (const [fName, fId] of Object.entries(fIds)) {
+            const ddfId = uuidv4();
+            await query(`INSERT INTO demandes_devis_fournisseurs (id, demande_devis_id, fournisseur_id, statut) VALUES (?, ?, ?, 'repondu')`, [ddfId, ddId, fId]);
+            
+            const offreId = uuidv4();
+            await query(`INSERT INTO offres_fournisseurs (id, ddq_fournisseur_id, delai_livraison_jours) VALUES (?, ?, 5)`, [offreId, ddfId]);
+            
+            await query(
+              `INSERT INTO offres_lignes (id, offre_id, demande_ligne_id, prix_unitaire, prix_unitaire_fcfa)
+               VALUES (?, ?, ?, ?, ?)`,
+              [uuidv4(), offreId, dalId, 2000 + Math.random() * 1000, 2000 + Math.random() * 1000]
+            );
+          }
+        }
       }
 
       // B. Bons de commande (10 BCs)
-      const bcStatuses = ['brouillon', 'en_cours', 'livre_partiel', 'livre_total', 'annule'];
       for (let i = 1; i <= 10; i++) {
         const bcId = uuidv4();
-        const fName = Object.keys(fournisseurIds)[i % 3];
+        const fName = Object.keys(fIds)[i % 3];
         const projCode = Object.keys(projetIds)[i % 3];
-        const status = bcStatuses[i % 5];
         const amount = 100000 + Math.floor(Math.random() * 1000000);
-        const delayed = i === 2 || i === 5 ? '2026-01-01' : '2026-12-31'; // Some delayed
         
         await query(
-          `INSERT OR IGNORE INTO bons_commande (id, numero, fournisseur_id, projet_id, montant_ht, montant_ttc, statut, date_livraison_prevue, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '-${i * 2} days'))`,
-          [bcId, `BC-2026-${String(i).padStart(4, '0')}`, fournisseurIds[fName], projetIds[projCode], amount, amount, status, delayed]
+          `INSERT OR IGNORE INTO bons_commande (id, numero, fournisseur_id, projet_id, montant_ht, montant_ttc, statut, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'en_cours', datetime('now', '-${i * 2} days'))`,
+          [bcId, `BC-2026-${String(i).padStart(4, '0')}`, fIds[fName], projetIds[projCode], amount, amount]
         );
       }
 
-      // C. Stocks & Magasins (Détail)
+      // C. Stocks (Idempotence & Valeur)
       const magId = uuidv4();
-      await query(`INSERT OR IGNORE INTO magasins (id, code, nom, site_id, actif) VALUES (?, 'MAG-DEMO', 'Magasin Central Démo', ?, 1)`, [magId, siteIds['CSO']]);
+      await query(`INSERT OR IGNORE INTO magasins (id, code, nom, site_id, actif) VALUES (?, 'MAG-CENTRAL', 'Magasin Principal', ?, 1)`, [magId, siteIds['CSO']]);
 
       for (const aCode of Object.keys(articleIds)) {
         const artId = articleIds[aCode];
-        const qty = 10 + Math.floor(Math.random() * 200);
+        const qty = 200 + Math.floor(Math.random() * 500);
         const price = articles.find(a => a.code === aCode)?.prix || 5000;
-        const totalValue = qty * price;
-
-        // Mise à jour table STOCKS (Indispensable pour le dashboard)
+        
+        await query(`DELETE FROM stocks WHERE article_id = ? AND magasin_id = ?`, [artId, magId]);
         await query(
-          `INSERT OR REPLACE INTO stocks (id, article_id, magasin_id, quantite, cump, valeur_totale, stock_min, stock_securite)
-           VALUES (?, ?, ?, ?, ?, ?, 20, 10)`,
-          [uuidv4(), artId, magId, qty, price, totalValue]
-        );
-
-        // Ajout d'un Lot
-        const lotId = uuidv4();
-        const expiry = aCode.startsWith('PH') ? "datetime('now', '+3 months')" : "datetime('now', '+2 years')";
-        await query(
-          `INSERT INTO lots (id, article_id, magasin_id, numero_lot, quantite, prix_unitaire, date_peremption)
-           VALUES (?, ?, ?, ?, ?, ?, ${expiry})`,
-          [lotId, artId, magId, `LOT-${aCode}-DEMO`, qty, price]
-        );
-
-        // Ajout d'un mouvement
-        await query(
-          `INSERT INTO mouvements_stock (id, type_mouvement, article_id, lot_id, magasin_dest_id, quantite, prix_unitaire, valeur, saisi_par)
-           VALUES (?, 'entree', ?, ?, ?, ?, ?, ?, ?)`,
-          [uuidv4(), artId, lotId, magId, qty, price, totalValue, adminId]
+          `INSERT INTO stocks (id, article_id, magasin_id, quantite, cump, valeur_totale, stock_min)
+           VALUES (?, ?, ?, ?, ?, ?, 50)`,
+          [uuidv4(), artId, magId, qty, price, qty * price]
         );
       }
-
-      // D. Flotte (5 véhicules)
-      const vehicules = [
-        { plate: '11-6655-BF', model: 'Toyota Hilux', type: '4x4' },
-        { plate: '11-7788-BF', model: 'Toyota Land Cruiser', type: '4x4' },
-        { plate: '11-2233-BF', model: 'Yamaha AG100', type: 'Moto' },
-        { plate: '11-4499-BF', model: 'Toyota Hilux', type: '4x4' },
-        { plate: '11-0011-BF', model: 'Toyota Prado', type: 'SUV' },
-      ];
-
-      for (let i = 0; i < vehicules.length; i++) {
-        const v = vehicules[i];
-        const equipId = uuidv4();
-        await query(
-          `INSERT INTO equipements (id, code_etiquette, designation, statut, site_id)
-           VALUES (?, ?, ?, 'en_service', ?)`,
-          [equipId, `VEH-${String(i+1).padStart(3, '0')}`, v.model, siteIds['CSO']]
-        );
-
-        const vId = uuidv4();
-        await query(
-          `INSERT INTO vehicules (id, equipement_id, immatriculation, marque, modele, type_vehicule, actif)
-           VALUES (?, ?, ?, 'Toyota', ?, ?, 1)`,
-          [vId, equipId, v.plate, v.model, v.type]
-        );
-
-        // Missions (10 missions)
-        const mId = uuidv4();
-        await query(
-          `INSERT INTO missions (id, numero, vehicule_id, destination, date_depart, statut, created_by)
-           VALUES (?, ?, ?, 'Ouagadougou - Bobo', datetime('now', '-${i} days'), 'terminee', ?)`,
-          [mId, `MISS-2026-${String(i+1).padStart(3, '0')}`, vId, adminId]
-        );
-      }
-
-      // E. Alertes (3 alertes actives)
-      await query(
-        `INSERT INTO alertes_stock (id, type_alerte, article_id, message, statut)
-         VALUES (?, 'rupture', ?, 'Rupture de stock critique détectée', 'active')`,
-        [uuidv4(), articleIds['PH-001']]
-      );
-      await query(
-        `INSERT INTO alertes_stock (id, type_alerte, message, statut)
-         VALUES (?, 'securite', 'Maintenance préventive véhicule 11-6655-BF requise', 'active')`,
-        [uuidv4()]
-      );
     }
 
     saveDatabase();
-    console.log('✅ Seed de données démo MASSIVE terminé !');
+    console.log('✅ Seed de données démo MASSIVE & COMPLÈTE terminé !');
     return true;
   } catch (err) {
     console.error('Erreur détaillée seed demo data:', err);
