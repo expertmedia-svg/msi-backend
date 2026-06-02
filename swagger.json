@@ -1,0 +1,402 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "MSI Gestion API",
+    "version": "1.0.0",
+    "description": "API complète pour le système de gestion logistique MSI Burkina Faso",
+    "contact": {
+      "name": "JOACHIM (Backend Lead)",
+      "email": "joachim@comstratmedia.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.msi.local",
+      "description": "Production Server"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Development Server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Dashboard",
+      "description": "KPIs et indicateurs temps réel"
+    },
+    {
+      "name": "Achats",
+      "description": "Gestion des demandes d'achat et bons de commande"
+    },
+    {
+      "name": "Devis",
+      "description": "Gestion des devis et offres fournisseurs"
+    },
+    {
+      "name": "Stocks",
+      "description": "Gestion complète des stocks et alertes"
+    },
+    {
+      "name": "Flotte",
+      "description": "Gestion des véhicules et maintenances"
+    },
+    {
+      "name": "Rapports",
+      "description": "Génération de rapports et exports PDF"
+    },
+    {
+      "name": "Scans",
+      "description": "Scanner code-barres et validation"
+    }
+  ],
+  "paths": {
+    "/api/dashboard/directeur": {
+      "get": {
+        "tags": ["Dashboard"],
+        "summary": "KPIs Directeur - Temps réel",
+        "description": "Retourne les KPIs consolidés pour le tableau de bord directeur (carburant, flotte, stocks, achats, budget)",
+        "parameters": [
+          {
+            "name": "periode",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["semaine", "mois", "annee"]
+            },
+            "description": "Période pour les KPIs"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "KPIs chargés avec succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "periode": { "type": "string" },
+                    "kpis": {
+                      "type": "object",
+                      "properties": {
+                        "carburant": { "type": "object" },
+                        "flotte": { "type": "object" },
+                        "stocks": { "type": "object" },
+                        "achats": { "type": "object" },
+                        "budget": { "type": "object" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Non authentifié" }
+        }
+      }
+    },
+    "/api/dashboard/resume-executif": {
+      "get": {
+        "tags": ["Dashboard"],
+        "summary": "Résumé exécutif - Top alertes critiques",
+        "description": "Retourne les 10 alertes les plus critiques du système",
+        "responses": {
+          "200": {
+            "description": "Alertes récupérées avec succès"
+          }
+        }
+      }
+    },
+    "/api/achats/devis/{demande_devis_id}/comparatif": {
+      "get": {
+        "tags": ["Devis"],
+        "summary": "Tableau comparatif des offres",
+        "description": "Génère un tableau comparatif avec analyse prix/délai/qualité",
+        "parameters": [
+          {
+            "name": "demande_devis_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tableau comparatif généré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "tableau": {
+                      "type": "object",
+                      "properties": {
+                        "stats_globales": { "type": "object" },
+                        "offres": { "type": "array" },
+                        "meilleur_offre_combinee": { "type": "object" },
+                        "recommandation": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Aucune offre trouvée" }
+        }
+      }
+    },
+    "/api/stocks/alertes/verification": {
+      "get": {
+        "tags": ["Stocks"],
+        "summary": "Vérifier les alertes stocks",
+        "description": "Vérifie et retourne toutes les alertes stocks (ruptures, péremptions, stock max)",
+        "responses": {
+          "200": {
+            "description": "Alertes chargées",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "alertes": {
+                      "type": "object",
+                      "properties": {
+                        "ruptures": { "type": "array" },
+                        "peremptions": { "type": "array" },
+                        "stock_max_depasse": { "type": "array" },
+                        "nb_ruptures": { "type": "integer" },
+                        "nb_peremptions": { "type": "integer" },
+                        "total_alertes": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stocks/sortie/fifo-fefo": {
+      "post": {
+        "tags": ["Stocks"],
+        "summary": "Enregistrer sortie FIFO/FEFO",
+        "description": "Enregistre une sortie de stock avec méthode FIFO ou FEFO automatique",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "article_id": { "type": "string" },
+                  "quantite_demandee": { "type": "number" },
+                  "methode": {
+                    "type": "string",
+                    "enum": ["FIFO", "FEFO"]
+                  },
+                  "motif": { "type": "string" }
+                },
+                "required": ["article_id", "quantite_demandee"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Sortie enregistrée avec succès" },
+          "400": { "description": "Quantité insuffisante" }
+        }
+      }
+    },
+    "/api/flotte/maintenances/planifier": {
+      "post": {
+        "tags": ["Flotte"],
+        "summary": "Planifier maintenance A/B/C",
+        "description": "Planifie une maintenance préventive (A: 1000km, B: 10000km, C: 40000km)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "vehicule_id": { "type": "string" },
+                  "type_service": {
+                    "type": "string",
+                    "enum": ["A", "B", "C"]
+                  },
+                  "km_prochain": { "type": "integer" },
+                  "date_prochaine": { "type": "string", "format": "date-time" }
+                },
+                "required": ["vehicule_id", "type_service"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Maintenance planifiée" },
+          "400": { "description": "Type de service invalide" }
+        }
+      }
+    },
+    "/api/rapports/audit/justificatifs/pdf": {
+      "get": {
+        "tags": ["Rapports"],
+        "summary": "Export PDF - Audit Justificatifs",
+        "description": "Génère un rapport PDF audit-ready des justificatifs comptables",
+        "parameters": [
+          {
+            "name": "bailleur_code",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "date_debut",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date" }
+          },
+          {
+            "name": "date_fin",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF généré",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": { "description": "Paramètres requis manquants" }
+        }
+      }
+    },
+    "/api/scans/article": {
+      "post": {
+        "tags": ["Scans"],
+        "summary": "Scanner un article",
+        "description": "Scan un article par code-barres ou saisie manuelle",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code_barres": { "type": "string" },
+                  "contexte": { "type": "object" }
+                },
+                "required": ["code_barres"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Article trouvé",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "article": { "type": "object" },
+                    "alternatives": { "type": "array" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Article non trouvé" }
+        }
+      }
+    },
+    "/api/scans/valider": {
+      "post": {
+        "tags": ["Scans"],
+        "summary": "Valider format code-barres",
+        "description": "Valide le format d'un code-barres (EAN-13, EAN-8, générique)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code_barres": { "type": "string" }
+                },
+                "required": ["code_barres"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validation complétée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "validation": { "type": "object" },
+                    "est_valide": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token pour authentification"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "message": { "type": "string" },
+          "error": { "type": "string" }
+        }
+      },
+      "Article": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "code": { "type": "string" },
+          "code_barres": { "type": "string" },
+          "designation": { "type": "string" },
+          "quantite": { "type": "number" },
+          "cump": { "type": "number" },
+          "magasin_nom": { "type": "string" }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ]
+}

@@ -3,8 +3,8 @@
 
 const express = require('express');
 const router = express.Router();
-const { authentifier } = require('../middleware/auth');
-const { getKpis } = require('../controllers/dashboardController');
+const { authentifier, autoriser } = require('../middleware/auth');
+const { getKpis, kpisDirecteur, resumeExecutif } = require('../controllers/dashboardController');
 
 router.use(authentifier);
 
@@ -13,5 +13,18 @@ router.use(authentifier);
  * Retourne KPIs consolidés de tous les modules
  */
 router.get('/kpis', getKpis);
+
+/**
+ * GET /api/dashboard/directeur
+ * KPIs spécifiques pour le directeur (temps réel)
+ * Query: ?periode=semaine|mois|annee
+ */
+router.get('/directeur', autoriser('directeur'), kpisDirecteur);
+
+/**
+ * GET /api/dashboard/resume-executif
+ * Top 10 des alertes critiques
+ */
+router.get('/resume-executif', autoriser('directeur', 'responsable_logistique'), resumeExecutif);
 
 module.exports = router;

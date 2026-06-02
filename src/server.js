@@ -28,6 +28,7 @@ const adminRoutes = require('./routes/admin');
 const referentielRoutes = require('./routes/referentiel');
 const dashboardRoutes = require('./routes/dashboard');
 const justificatifsRoutes = require('./routes/justificatifs');
+const integrationRoutes = require('./routes/integration');
 
 // Swagger
 const swaggerUi = require('swagger-ui-express');
@@ -127,6 +128,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/referentiel', referentielRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/justificatifs', justificatifsRoutes);
+app.use('/api/integration', integrationRoutes);
 
 // Documentation API Swagger
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {

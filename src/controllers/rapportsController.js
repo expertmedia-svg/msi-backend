@@ -315,4 +315,86 @@ const exportEquipementsPDF = async (req, res) => {
   }
 };
 
-module.exports = { exportStocksExcel, exportAchatsExcel, exportFlotteExcel, exportEquipementsPDF };
+// ── Exports PDF Audit-ready ────────────────────────────────────────────
+
+const pdfService = require('../services/pdfService');
+
+const exportAuditJustificatifs = async (req, res) => {
+  try {
+    const { bailleur_code, date_debut, date_fin } = req.query;
+
+    if (!bailleur_code || !date_debut || !date_fin) {
+      return res.status(400).json({
+        success: false,
+        message: 'Paramètres requis: bailleur_code, date_debut, date_fin'
+      });
+    }
+
+    const doc = await pdfService.genererRapportAuditJustificatifs(bailleur_code, date_debut, date_fin);
+    const filename = `audit_justificatifs_${bailleur_code}_${date_debut}_${date_fin}.pdf`;
+
+    pdfService.envoyerPdfEnReponse(doc, res, filename);
+    logger.info(`PDF généré: ${filename}`);
+  } catch (error) {
+    logger.error('Erreur export audit justificatifs:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la génération du rapport'
+    });
+  }
+};
+
+const exportConformiteAchats = async (req, res) => {
+  try {
+    const { date_debut, date_fin } = req.query;
+
+    if (!date_debut || !date_fin) {
+      return res.status(400).json({
+        success: false,
+        message: 'Paramètres requis: date_debut, date_fin'
+      });
+    }
+
+    const doc = await pdfService.genererRapportConformiteAchats(date_debut, date_fin);
+    const filename = `conformite_achats_${date_debut}_${date_fin}.pdf`;
+
+    pdfService.envoyerPdfEnReponse(doc, res, filename);
+    logger.info(`PDF généré: ${filename}`);
+  } catch (error) {
+    logger.error('Erreur export conformité achats:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la génération du rapport'
+    });
+  }
+};
+
+const exportInventaire = async (req, res) => {
+  try {
+    const { magasin_id, date_inventaire } = req.query;
+
+    if (!magasin_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Paramètre requis: magasin_id'
+      });
+    }
+
+    const doc = await pdfService.genererRapportInventaire(magasin_id, date_inventaire || new Date());
+    const filename = `inventaire_${magasin_id}_${new Date().toISOString().slice(0,10)}.pdf`;
+
+    pdfService.envoyerPdfEnReponse(doc, res, filename);
+    logger.info(`PDF généré: ${filename}`);
+  } catch (error) {
+    logger.error('Erreur export inventaire:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la génération du rapport'
+    });
+  }
+};
+
+module.exports = {
+  exportStocksExcel, exportAchatsExcel, exportFlotteExcel, exportEquipementsPDF,
+  exportAuditJustificatifs, exportConformiteAchats, exportInventaire
+};
