@@ -287,9 +287,63 @@ async function autoMigrateIntegrations() {
   }
 }
 
+async function runGlobalMigrations() {
+  const { getDb, saveDatabase } = require('./config/database');
+  const fs = require('fs');
+  const path = require('path');
+
+  try {
+    const db = getDb();
+    if (!db) {
+      logger.error('⚠️ Base de données non initialisée pour la migration globale');
+      return;
+    }
+
+    const schemaPath = path.join(__dirname, 'database/schema-sqlite.sql');
+    if (!fs.existsSync(schemaPath)) {
+      logger.warn(`⚠️ Fichier schema-sqlite.sql introuvable pour migration automatique : ${schemaPath}`);
+      return;
+    }
+
+    const sql = fs.readFileSync(schemaPath, 'utf8');
+    const statements = sql
+      .split(';')
+      .map(s =>
+        s.split('\n')
+          .filter(line => !line.trim().startsWith('--'))
+          .join('\n')
+          .trim()
+      )
+      .filter(s => s.length > 0);
+
+    // Désactive temporairement les clés étrangères pour la migration
+    db.run('PRAGMA foreign_keys = OFF');
+
+    let executedCount = 0;
+    for (const statement of statements) {
+      try {
+        db.run(statement);
+        executedCount++;
+      } catch (err) {
+        // Les tables déjà existantes lèveront des avertissements, ce qui est normal
+      }
+    }
+
+    // Réactive les clés étrangères
+    db.run('PRAGMA foreign_keys = ON');
+    saveDatabase();
+    logger.info(`✅ Migration globale automatique complétée (${executedCount} instructions exécutées)`);
+  } catch (err) {
+    logger.error('⚠️ Erreur lors de la migration globale automatique :', err.message);
+  }
+}
+
 async function start() {
   await initializeDatabase();
   logger.info('✅ Base SQLite initialisée');
+
+  // Lancer la migration globale automatique de toutes les tables SQLite
+  await runGlobalMigrations();
 
   // Lancer la migration automatique des intégrations
   await autoMigrateIntegrations();
