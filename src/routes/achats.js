@@ -8,6 +8,7 @@ const devisCtrl = require('../controllers/devisController');
 router.use(authentifier);
 router.get('/kpi', autoriser('achats'), ctrl.kpiAchats);
 router.get('/demandes', autoriser('achats'), ctrl.listerDemandes);
+router.get('/demandes/:id/comparatif', autoriser('achats'), ctrl.genererTableauComparatif);
 router.post('/demandes', autoriser('achats', 'creer'), ctrl.creerDemande);
 router.put('/demandes/:id/valider', autoriser('achats', 'valider'), ctrl.validerDemande);
 router.get('/commandes', autoriser('achats'), ctrl.listerCommandes);
