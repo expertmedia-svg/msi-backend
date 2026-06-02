@@ -197,9 +197,102 @@ cron.schedule('0 3 * * *', async () => {
 
 // ── Démarrage ───────────────────────────────────────────────
 
+async function autoMigrateIntegrations() {
+  const { query: dbQuery, saveDatabase } = require('./config/database');
+  const { v4: uuidv4 } = require('uuid');
+
+  try {
+    // 1. Table integrations_config
+    await dbQuery(`
+      CREATE TABLE IF NOT EXISTS integrations_config (
+        id TEXT PRIMARY KEY,
+        system_code VARCHAR(20) NOT NULL UNIQUE,
+        system_nom VARCHAR(100) NOT NULL,
+        description TEXT,
+        api_url VARCHAR(500),
+        api_key TEXT,
+        webhook_url VARCHAR(500),
+        statut VARCHAR(20) DEFAULT 'non_configure',
+        actif INTEGER DEFAULT 0,
+        dernier_sync DATETIME,
+        dernier_statut VARCHAR(20),
+        dernier_message TEXT,
+        nb_syncs_ok INTEGER DEFAULT 0,
+        nb_syncs_erreur INTEGER DEFAULT 0,
+        format_export VARCHAR(20) DEFAULT 'json',
+        config_extra TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 2. Table integrations_logs
+    await dbQuery(`
+      CREATE TABLE IF NOT EXISTS integrations_logs (
+        id TEXT PRIMARY KEY,
+        system_code VARCHAR(20) NOT NULL,
+        direction VARCHAR(10) DEFAULT 'export',
+        statut VARCHAR(20) NOT NULL,
+        nb_enregistrements INTEGER DEFAULT 0,
+        message TEXT,
+        payload_resume TEXT,
+        duree_ms INTEGER,
+        declencheur VARCHAR(50) DEFAULT 'manuel',
+        user_id TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 3. Seed initial
+    const systemes = [
+      {
+        code: 'SUN',
+        nom: 'SUN Systems (Finance)',
+        desc: 'Système financier MSI International – export des valorisations stock, engagements achats et immobilisations équipements.',
+        fmt: 'excel',
+      },
+      {
+        code: 'CLIC_PLUS',
+        nom: 'CLIC+ (Logistique)',
+        desc: 'Plateforme logistique MSI – triangulation des mouvements de stock pharmaceutique et suivi des lots/péremptions.',
+        fmt: 'json',
+      },
+      {
+        code: 'ORION',
+        nom: 'ORION (RH & Actifs)',
+        desc: 'Système RH et gestion des actifs MSI – synchronisation des affectations équipements par agent et site.',
+        fmt: 'json',
+      },
+      {
+        code: 'MATE',
+        nom: 'MATE (Flotte & Terrain)',
+        desc: 'Système de suivi terrain MSI – export des missions, consommation carburant et incidents flotte.',
+        fmt: 'json',
+      },
+    ];
+
+    for (const s of systemes) {
+      const check = await dbQuery('SELECT id FROM integrations_config WHERE system_code = ?', [s.code]);
+      if (check.rows.length === 0) {
+        await dbQuery(`
+          INSERT INTO integrations_config (id, system_code, system_nom, description, format_export, statut, actif)
+          VALUES (?, ?, ?, ?, ?, 'non_configure', 0)
+        `, [uuidv4(), s.code, s.nom, s.desc, s.fmt]);
+      }
+    }
+    saveDatabase();
+    logger.info('✅ Migration automatique des intégrations complétée');
+  } catch (err) {
+    logger.error('⚠️ Erreur lors de la migration automatique des intégrations :', err.message);
+  }
+}
+
 async function start() {
   await initializeDatabase();
   logger.info('✅ Base SQLite initialisée');
+
+  // Lancer la migration automatique des intégrations
+  await autoMigrateIntegrations();
 
   // Seed automatique des utilisateurs de production si nécessaire
   try {
