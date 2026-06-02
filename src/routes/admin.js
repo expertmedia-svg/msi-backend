@@ -5,6 +5,7 @@ const { authentifier, requireRole } = require('../middleware/auth');
 const { query } = require('../config/database');
 const bcrypt = require('bcrypt');
 const logger = require('../config/logger');
+const seedDemoDataLogic = require('../database/seed-demo-data-logic');
 
 router.use(authentifier);
 router.use(requireRole('admin', 'admin_systeme'));
@@ -106,6 +107,18 @@ router.put('/devises/:code/taux', async (req, res) => {
     return res.json({ success: true, message: 'Taux de change mis à jour' });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
+});
+
+// Générer les données de démo
+router.post('/demo-seed', async (req, res) => {
+  try {
+    logger.info('🌱 Lancement du seed de données démo par l\'API Admin...');
+    await seedDemoDataLogic();
+    return res.json({ success: true, message: 'Données de démo générées avec succès !' });
+  } catch (err) {
+    logger.error('Erreur lors du seed de démo par l\'API Admin:', err);
+    return res.status(500).json({ success: false, message: 'Erreur lors de la génération des données' });
   }
 });
 
