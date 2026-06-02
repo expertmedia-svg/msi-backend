@@ -1,4 +1,8 @@
-// Quick schema fix for missing columns
+/**
+ * Fix missing columns in SQLite schema
+ * Lance avec: node src/database/fix-schema.js
+ */
+
 require('dotenv').config();
 const initSqlJs = require('sql.js');
 const fs = require('fs');
@@ -23,42 +27,35 @@ async function fixSchema() {
 
   db.run('PRAGMA foreign_keys = OFF');
 
-  // Add missing columns
-  const fixes = [
-    {
-      table: 'fournisseurs',
-      column: 'contact_principal',
-      definition: "VARCHAR(100)",
-      check: "PRAGMA table_info(fournisseurs) WHERE name='contact_principal'"
-    },
-    {
-      table: 'fournisseurs',
-      column: 'email_contact',
-      definition: "VARCHAR(100)",
-      check: "PRAGMA table_info(fournisseurs) WHERE name='email_contact'"
-    }
+  // Add missing columns to fournisseurs
+  const columnsToAdd = [
+    { column: 'contact_principal', type: 'VARCHAR(100)' },
+    { column: 'email_contact', type: 'VARCHAR(100)' }
   ];
 
-  for (const fix of fixes) {
+  console.log('\n🔧 Ajout des colonnes manquantes...');
+  for (const col of columnsToAdd) {
     try {
-      const result = db.exec(fix.check);
-      if (result.length === 0) {
-        console.log(`  ⚙️  Ajout colonne ${fix.column} à ${fix.table}...`);
-        db.run(`ALTER TABLE ${fix.table} ADD COLUMN ${fix.column} ${fix.definition}`);
-        console.log(`  ✅ Colonne ${fix.column} ajoutée`);
-      }
+      db.run(`ALTER TABLE fournisseurs ADD COLUMN ${col.column} ${col.type}`);
+      console.log(`  ✅ Colonne ${col.column} ajoutée à fournisseurs`);
     } catch (err) {
-      console.log(`  ⏭️  Colonne ${fix.column} existe déjà`);
+      if (err.message.includes('duplicate column')) {
+        console.log(`  ⏭️  Colonne ${col.column} existe déjà`);
+      } else {
+        console.log(`  ⚠️  ${err.message}`);
+      }
     }
   }
 
   db.run('PRAGMA foreign_keys = ON');
 
   // Save
+  console.log('\n💾 Sauvegarde...');
   const data = db.export();
   const buffer = Buffer.from(data);
   fs.writeFileSync(dbPath, buffer);
-  console.log(`\n✅ Schéma corrigé et sauvegardé`);
+  console.log(`✅ Schéma corrigé et sauvegardé`);
+  console.log(`   Fichier: ${dbPath}`);
 }
 
 fixSchema().catch(err => {
